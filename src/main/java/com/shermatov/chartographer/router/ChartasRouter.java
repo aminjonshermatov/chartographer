@@ -4,7 +4,6 @@ import com.shermatov.chartographer.exception.ChartaNotFoundException;
 import com.shermatov.chartographer.handler.ChartasHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -39,7 +38,7 @@ public class ChartasRouter {
         return ((exchange, chain) -> chain.filter(exchange)
                 .onErrorResume(ChartaNotFoundException.class, ignore_ -> {
                     ServerHttpResponse response = exchange.getResponse();
-                    response.setStatusCode(HttpStatus.BAD_REQUEST);
+                    response.setStatusCode(ChartaNotFoundException.httpStatus);
                     return response.setComplete();
                 }));
     }
