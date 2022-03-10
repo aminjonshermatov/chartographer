@@ -15,13 +15,13 @@ public class ChartasRepositoryImpl implements ChartasRepository {
 
     @Override
     public Mono<Charta> findById(String id) {
-        if (!chartasHashMap.containsKey(id)) return Mono.error(new ChartaNotFoundException());
+        if (!chartasHashMap.containsKey(id)) return Mono.error(ChartaNotFoundException::new);
         return Mono.just(chartasHashMap.get(id));
     }
 
     @Override
     public Mono<Void> deleteById(String id) {
-        if (!chartasHashMap.containsKey(id)) return Mono.error(new ChartaNotFoundException());
+        if (!chartasHashMap.containsKey(id)) return Mono.error(ChartaNotFoundException::new);
         chartasHashMap.remove(id);
         return Mono.empty();
     }

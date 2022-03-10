@@ -3,8 +3,6 @@ package com.shermatov.chartographer.repository;
 import com.shermatov.chartographer.domain.Charta;
 import reactor.core.publisher.Mono;
 
-import java.util.Optional;
-
 public interface ChartasRepository {
 
     Mono<Charta> findById(String id);

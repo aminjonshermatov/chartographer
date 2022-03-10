@@ -2,9 +2,11 @@ package com.shermatov.chartographer.router;
 
 import com.shermatov.chartographer.exception.BadRequestException;
 import com.shermatov.chartographer.exception.ChartaNotFoundException;
+import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.handler.ChartasHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -20,17 +22,14 @@ public class ChartasRouter {
     @Bean
     public RouterFunction<ServerResponse> chartaRoute(ChartasHandler chartasHandler) {
         return RouterFunctions
-                // POST /chartas/?width={width}&height={height}
                 .route(
                         POST(CHARTAS_ENDPOINT),
                         chartasHandler::createCharta
                 )
-                // GET /chartas/{id}/?x={x}&y={y}&width={width}&height={height}
                 .andRoute(
                         GET(CHARTAS_ENDPOINT + "/{id}"),
                         chartasHandler::getCharta
                 )
-                // `DELETE /chartas/{id}/`
                 .andRoute(
                         DELETE(CHARTAS_ENDPOINT + "/{id}"),
                         chartasHandler::deleteCharta
@@ -53,6 +52,26 @@ public class ChartasRouter {
                 .onErrorResume(BadRequestException.class, ignore_ -> {
                     ServerHttpResponse response = exchange.getResponse();
                     response.setStatusCode(BadRequestException.httpStatus);
+                    return response.setComplete();
+                })));
+    }
+
+    @Bean
+    WebFilter serverErrorExceptionHandler() {
+        return (((exchange, chain) -> chain.filter(exchange)
+                .onErrorResume(ServerErrorException.class, ignore_ -> {
+                    ServerHttpResponse response = exchange.getResponse();
+                    response.setStatusCode(BadRequestException.httpStatus);
+                    return response.setComplete();
+                })));
+    }
+
+    @Bean
+    WebFilter exceptionsHandler() {
+        return (((exchange, chain) -> chain.filter(exchange)
+                .onErrorResume(Exception.class, ignore_ -> {
+                    ServerHttpResponse response = exchange.getResponse();
+                    response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
                     return response.setComplete();
                 })));
     }
