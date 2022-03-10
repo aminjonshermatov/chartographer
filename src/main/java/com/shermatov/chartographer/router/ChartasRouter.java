@@ -1,5 +1,6 @@
 package com.shermatov.chartographer.router;
 
+import com.shermatov.chartographer.exception.BadRequestException;
 import com.shermatov.chartographer.exception.ChartaNotFoundException;
 import com.shermatov.chartographer.handler.ChartasHandler;
 import org.springframework.context.annotation.Bean;
@@ -19,14 +20,17 @@ public class ChartasRouter {
     @Bean
     public RouterFunction<ServerResponse> chartaRoute(ChartasHandler chartasHandler) {
         return RouterFunctions
+                // POST /chartas/?width={width}&height={height}
                 .route(
                         POST(CHARTAS_ENDPOINT),
                         chartasHandler::createCharta
                 )
+                // GET /chartas/{id}/?x={x}&y={y}&width={width}&height={height}
                 .andRoute(
                         GET(CHARTAS_ENDPOINT + "/{id}"),
                         chartasHandler::getCharta
                 )
+                // `DELETE /chartas/{id}/`
                 .andRoute(
                         DELETE(CHARTAS_ENDPOINT + "/{id}"),
                         chartasHandler::deleteCharta
@@ -41,6 +45,16 @@ public class ChartasRouter {
                     response.setStatusCode(ChartaNotFoundException.httpStatus);
                     return response.setComplete();
                 }));
+    }
+
+    @Bean
+    WebFilter badRequestExceptionHandler() {
+        return (((exchange, chain) -> chain.filter(exchange)
+                .onErrorResume(BadRequestException.class, ignore_ -> {
+                    ServerHttpResponse response = exchange.getResponse();
+                    response.setStatusCode(BadRequestException.httpStatus);
+                    return response.setComplete();
+                })));
     }
 
 }

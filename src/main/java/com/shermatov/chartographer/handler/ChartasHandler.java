@@ -1,7 +1,7 @@
 package com.shermatov.chartographer.handler;
 
 import com.shermatov.chartographer.domain.Charta;
-import com.shermatov.chartographer.errors.ErrorsBuilder;
+import com.shermatov.chartographer.exception.BadRequestException;
 import com.shermatov.chartographer.repository.ChartasConfigRepository;
 import com.shermatov.chartographer.repository.ChartasRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +14,7 @@ import reactor.core.publisher.Mono;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.shermatov.chartographer.constants.ChartasConstants.MAX_IMAGE_HEIGHT;
-import static com.shermatov.chartographer.constants.ChartasConstants.MAX_IMAGE_WIDTH;
+import static com.shermatov.chartographer.constants.ChartasConstants.*;
 
 @Component
 public class ChartasHandler {
@@ -32,15 +31,13 @@ public class ChartasHandler {
         Optional<String> heightOpt = serverRequest.queryParam("height");
 
         if (widthOpt.isEmpty() || heightOpt.isEmpty())
-            return ErrorsBuilder.badRequest("Width and Height are required.");
+            return Mono.error(new BadRequestException());
 
         int width = Integer.parseInt(widthOpt.get());
         int height = Integer.parseInt(heightOpt.get());
 
-        if (width <= 0 || width > MAX_IMAGE_WIDTH)
-            return ErrorsBuilder.badRequest("Width must in (0, " + MAX_IMAGE_WIDTH + "] interval.");
-        if (height <= 0 || height > MAX_IMAGE_WIDTH)
-            return ErrorsBuilder.badRequest("Height must in (0, " + MAX_IMAGE_HEIGHT + "] interval.");
+        if (width <= 0 || width > MAX_IMAGE_WIDTH || height <= 0 || height > MAX_IMAGE_WIDTH)
+            return Mono.error(new BadRequestException());
 
         return ServerResponse
                 .status(HttpStatus.CREATED)
@@ -51,11 +48,36 @@ public class ChartasHandler {
                         .build()), String.class);
     }
 
+    // /chartas/{id}/?x={x}&y={y}&width={width}&height={height}
     public Mono<ServerResponse> getCharta(ServerRequest serverRequest) {
-        String id = serverRequest.pathVariable("id");
+        Optional<String> xOpt = serverRequest.queryParam("x");
+        Optional<String> yOpt = serverRequest.queryParam("y");
+        Optional<String> widthOpt = serverRequest.queryParam("width");
+        Optional<String> heightOpt = serverRequest.queryParam("height");
 
+        if (widthOpt.isEmpty() || heightOpt.isEmpty() || xOpt.isEmpty() || yOpt.isEmpty())
+            return Mono.error(new BadRequestException());
+
+        int height = Integer.parseInt(heightOpt.get());
+        int width = Integer.parseInt(widthOpt.get());
+
+        if (width <= 0 || width > MAX_REQUEST_IMAGE_SIZE || height <= 0 || height > MAX_REQUEST_IMAGE_SIZE)
+            return Mono.error(new BadRequestException());
+
+        int x = Integer.parseInt(xOpt.get());
+        int y = Integer.parseInt(yOpt.get());
+        if (x < 0 || y < 0 || x > MAX_IMAGE_WIDTH || y > MAX_IMAGE_HEIGHT)
+            return Mono.error(new BadRequestException());
+
+        String id = serverRequest.pathVariable("id");
         return chartasRepository.findById(id)
-                .flatMap(charta -> ServerResponse.ok().body(Mono.just(charta), Charta.class));
+                .flatMap(charta -> {
+                    if (x > charta.getWidth() || y > charta.getHeight())
+                        return Mono.error(new BadRequestException());
+
+                    // TODO create methods to communicate with images
+                    return Mono.empty();
+                });
     }
 
     public Mono<ServerResponse> deleteCharta(ServerRequest serverRequest) {
