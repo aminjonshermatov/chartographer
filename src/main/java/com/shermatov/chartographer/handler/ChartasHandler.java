@@ -54,7 +54,15 @@ public class ChartasHandler {
     public Mono<ServerResponse> getCharta(ServerRequest serverRequest) {
         String id = serverRequest.pathVariable("id");
 
-        return ServerResponse.ok().body(chartasRepository.findById(id), Charta.class);
+        return chartasRepository.findById(id)
+                .flatMap(charta -> ServerResponse.ok().body(Mono.just(charta), Charta.class));
+    }
+
+    public Mono<ServerResponse> deleteCharta(ServerRequest serverRequest) {
+        String id = serverRequest.pathVariable("id");
+
+        return chartasRepository.deleteById(id)
+                .flatMap((ignore_) -> ServerResponse.ok().build());
     }
 
 }

@@ -1,6 +1,7 @@
 package com.shermatov.chartographer.repository.impl;
 
 import com.shermatov.chartographer.domain.Charta;
+import com.shermatov.chartographer.exception.ChartaNotFoundException;
 import com.shermatov.chartographer.repository.ChartasRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
@@ -13,16 +14,14 @@ public class ChartasRepositoryImpl implements ChartasRepository {
     private final Map<String, Charta> chartasHashMap = new HashMap<>();
 
     @Override
-    public Mono<Optional<Charta>> findById(String id) {
-        return Mono.just(
-                chartasHashMap.containsKey(id)
-                        ? Optional.of(chartasHashMap.get(id))
-                        : Optional.empty()
-        );
+    public Mono<Charta> findById(String id) {
+        if (!chartasHashMap.containsKey(id)) return Mono.error(new ChartaNotFoundException());
+        return Mono.just(chartasHashMap.get(id));
     }
 
     @Override
     public Mono<Void> deleteById(String id) {
+        if (!chartasHashMap.containsKey(id)) return Mono.error(new ChartaNotFoundException());
         chartasHashMap.remove(id);
         return Mono.empty();
     }

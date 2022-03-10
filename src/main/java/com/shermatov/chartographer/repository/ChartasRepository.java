@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface ChartasRepository {
 
-    Mono<Optional<Charta>> findById(String id);
+    Mono<Charta> findById(String id);
     Mono<Void> deleteById(String id);
     Mono<String> insert(Charta charta);
 
