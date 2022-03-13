@@ -6,7 +6,7 @@ import reactor.core.publisher.Mono;
 public interface ChartasRepository {
 
     Mono<Charta> findById(String id);
-    Mono<Void> deleteById(String id);
+    Mono<Boolean> deleteById(String id);
     Mono<String> insert(Charta charta);
 
 }

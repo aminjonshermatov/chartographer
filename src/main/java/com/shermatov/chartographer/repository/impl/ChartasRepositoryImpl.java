@@ -20,10 +20,10 @@ public class ChartasRepositoryImpl implements ChartasRepository {
     }
 
     @Override
-    public Mono<Void> deleteById(String id) {
+    public Mono<Boolean> deleteById(String id) {
         if (!chartasHashMap.containsKey(id)) return Mono.error(ChartaNotFoundException::new);
         chartasHashMap.remove(id);
-        return Mono.empty();
+        return Mono.just(true);
     }
 
     @Override

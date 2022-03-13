@@ -8,8 +8,11 @@ import com.shermatov.chartographer.repository.ImagesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.BodyInserter;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -86,18 +89,22 @@ public class ChartasHandler {
         String id = serverRequest.pathVariable("id");
         return chartasRepository.findById(id)
                 .flatMap(charta -> {
-                    if (x > charta.getWidth() || y > charta.getHeight())
+                    if (x + width > charta.getWidth() || y + height > charta.getHeight())
                         return Mono.error(BadRequestException::new);
-
-                    // TODO create methods to communicate with images
-                    return Mono.empty();
-                });
+                    return chartasConfigRepository.getPathToContentFolder();
+                })
+                .flatMap(folderPath -> imagesRepository.getSubImage(folderPath, id, x, y, width, height))
+                .flatMap(image -> ServerResponse.ok()
+                        .header("Content-Type", "image/" + IMAGE_FORMAT)
+                        .body(BodyInserters.fromDataBuffers(Flux.just(image))));
     }
 
     public Mono<ServerResponse> deleteCharta(ServerRequest serverRequest) {
         String id = serverRequest.pathVariable("id");
 
         return chartasRepository.deleteById(id)
+                .flatMap((ignore_) -> chartasConfigRepository.getPathToContentFolder())
+                .flatMap(folderPath -> imagesRepository.deleteImage(folderPath, id))
                 .flatMap((ignore_) -> ServerResponse.ok().build());
     }
 

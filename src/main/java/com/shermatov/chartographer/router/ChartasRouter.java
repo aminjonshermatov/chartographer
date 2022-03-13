@@ -66,14 +66,5 @@ public class ChartasRouter {
                 })));
     }
 
-    @Bean
-    WebFilter exceptionsHandler() {
-        return (((exchange, chain) -> chain.filter(exchange)
-                .onErrorResume(Exception.class, ignore_ -> {
-                    ServerHttpResponse response = exchange.getResponse();
-                    response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
-                    return response.setComplete();
-                })));
-    }
 
 }
