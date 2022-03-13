@@ -2,10 +2,13 @@ package com.shermatov.chartographer.handler;
 
 import com.shermatov.chartographer.domain.Charta;
 import com.shermatov.chartographer.exception.BadRequestException;
+import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.repository.ChartasConfigRepository;
 import com.shermatov.chartographer.repository.ChartasRepository;
 import com.shermatov.chartographer.repository.ImagesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.BodyInserter;
@@ -16,6 +19,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import javax.imageio.ImageIO;
+import javax.imageio.stream.ImageInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,6 +72,45 @@ public class ChartasHandler {
                                     .status(HttpStatus.CREATED)
                                     .body(Mono.just(id), String.class);
                         }));
+    }
+
+    public Mono<ServerResponse> saveChartaFragment(ServerRequest serverRequest) {
+        Optional<String> xOpt = serverRequest.queryParam("x");
+        Optional<String> yOpt = serverRequest.queryParam("y");
+        Optional<String> widthOpt = serverRequest.queryParam("width");
+        Optional<String> heightOpt = serverRequest.queryParam("height");
+
+        if (widthOpt.isEmpty() || heightOpt.isEmpty() || xOpt.isEmpty() || yOpt.isEmpty())
+            return Mono.error(BadRequestException::new);
+
+        int height = Integer.parseInt(heightOpt.get());
+        int width = Integer.parseInt(widthOpt.get());
+        int x = Integer.parseInt(xOpt.get());
+        int y = Integer.parseInt(yOpt.get());
+        if (x < 0 || y < 0 || x > MAX_IMAGE_WIDTH || y > MAX_IMAGE_HEIGHT)
+            return Mono.error(BadRequestException::new);
+
+        System.out.println("1");
+        // UnsupportedMediaTypeStatusException: 415 UNSUPPORTED_MEDIA_TYPE "Content type 'image/bmp' not supported for bodyType=java.io.ByteArrayInputStream"
+        serverRequest.bodyToFlux(ByteArrayInputStream.class)
+                .publishOn(Schedulers.boundedElastic())
+                .flatMap(image -> {
+                    System.out.println("2");
+                    try {
+                        System.out.println("ok");
+                        ImageIO.write(ImageIO.read(image), IMAGE_FORMAT, new File("testSample123" + "." + IMAGE_FORMAT));
+                    } catch (IOException e) {
+                        System.out.println("error");
+                        return Mono.error(ServerErrorException::new);
+                    }
+
+                    return Flux.empty();
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
+        System.out.println("3");
+
+        return ServerResponse.ok().build();
     }
 
     public Mono<ServerResponse> getCharta(ServerRequest serverRequest) {

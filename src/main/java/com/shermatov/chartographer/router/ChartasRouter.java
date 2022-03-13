@@ -27,6 +27,10 @@ public class ChartasRouter {
                         chartasHandler::createCharta
                 )
                 .andRoute(
+                        POST(CHARTAS_ENDPOINT + "/{id}"),
+                        chartasHandler::saveChartaFragment
+                )
+                .andRoute(
                         GET(CHARTAS_ENDPOINT + "/{id}"),
                         chartasHandler::getCharta
                 )
