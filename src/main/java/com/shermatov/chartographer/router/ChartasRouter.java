@@ -7,6 +7,7 @@ import com.shermatov.chartographer.handler.ChartasHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -27,7 +28,7 @@ public class ChartasRouter {
                         chartasHandler::createCharta
                 )
                 .andRoute(
-                        POST(CHARTAS_ENDPOINT + "/{id}"),
+                        POST(CHARTAS_ENDPOINT + "/{id}").and(accept(new MediaType("image", "bmp"))),
                         chartasHandler::saveChartaFragment
                 )
                 .andRoute(

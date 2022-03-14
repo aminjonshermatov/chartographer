@@ -1,23 +1,21 @@
 package com.shermatov.chartographer.repository.impl;
 
-import ch.qos.logback.core.util.FileUtil;
+import com.shermatov.chartographer.domain.Pair;
+import com.shermatov.chartographer.domain.Point;
 import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.repository.ImagesRepository;
-import org.springframework.core.io.Resource;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 import static com.shermatov.chartographer.constants.ChartasConstants.DEFAULT_COLOR;
 import static com.shermatov.chartographer.constants.ChartasConstants.IMAGE_FORMAT;
@@ -26,7 +24,7 @@ import static com.shermatov.chartographer.constants.ChartasConstants.IMAGE_FORMA
 public class ImagesRepositoryImpl implements ImagesRepository {
 
     @Override
-    public Mono<Boolean> createDefaultImage(final String folder, final String id, int width, int height) {
+    public Mono<Boolean> createDefaultImage(final Path filePath, int width, int height) {
         return Mono.defer(() -> {
             BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D graphics2D = bufferedImage.createGraphics();
@@ -34,12 +32,11 @@ public class ImagesRepositoryImpl implements ImagesRepository {
             graphics2D.setColor(DEFAULT_COLOR);
             graphics2D.fillRect(0, 0, width, height);
 
-            File directory = new File(folder);
-            if (!directory.exists()) directory.mkdirs();
-
-            String path = String.format("%s/%s.%s", folder, id, IMAGE_FORMAT);
             try {
-                ImageIO.write(bufferedImage, IMAGE_FORMAT, new File(path));
+                Files.createDirectories(filePath.getParent());
+                Files.createFile(filePath);
+
+                ImageIO.write(bufferedImage, IMAGE_FORMAT, new BufferedOutputStream(Files.newOutputStream(filePath)));
             } catch (IOException e) {
                 return Mono.error(ServerErrorException::new);
             }
@@ -49,13 +46,8 @@ public class ImagesRepositoryImpl implements ImagesRepository {
     }
 
     @Override
-    public Mono<Boolean> deleteImage(String folder, String id) {
+    public Mono<Boolean> deleteImage(final Path filePath) {
         return Mono.defer(() -> {
-            File directory = new File(folder);
-            // folder must exist, otherwise incorrect algorithm
-            if (!directory.exists()) return Mono.error(ServerErrorException::new);
-
-            Path filePath = Paths.get(String.format("%s/%s.%s", folder, id, IMAGE_FORMAT));
             try {
                 Files.delete(filePath);
             } catch (IOException e) {
@@ -67,17 +59,10 @@ public class ImagesRepositoryImpl implements ImagesRepository {
     }
 
     @Override
-    public Mono<DataBuffer> getSubImage(final String folder, final String id, int x, int y, int width, int height) {
+    public Mono<DataBuffer> getSubImage(final Path filePath, int x, int y, int width, int height) {
         return Mono.defer(() -> {
-            File directory = new File(folder);
-            // folder must exist, otherwise incorrect algorithm
-            if (!directory.exists()) return Mono.error(ServerErrorException::new);
-
-            File imageFile = new File(String.format("%s/%s.%s", folder, id, IMAGE_FORMAT));
-            if (!imageFile.exists()) return Mono.error(ServerErrorException::new);
-
             try {
-                BufferedImage bufferedImage = ImageIO.read(imageFile);
+                BufferedImage bufferedImage = ImageIO.read(Files.newInputStream(filePath));
 
                 ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
                 ImageIO.write(bufferedImage.getSubimage(x, y, width, height), IMAGE_FORMAT, byteArray);
@@ -90,8 +75,33 @@ public class ImagesRepositoryImpl implements ImagesRepository {
     }
 
     @Override
-    public Mono<DataBuffer> overrideImage(Mono<Resource> image, int x, int y, int width, int height) {
-        return null;
+    public Mono<Boolean> overrideImage(final Path sourceFile, BufferedImage fragment, Flux<Pair<Point, Point>> points) {
+        try {
+            final BufferedImage source = ImageIO.read(Files.newInputStream(sourceFile));
+
+            return points
+                    .flatMap(pair -> {
+                        System.out.println(pair.getFirst().getX() + " " + pair.getFirst().getY() + ":" + pair.getSecond().getX() + " " + pair.getSecond().getY());
+                        source.setRGB(pair.getFirst().getX(), pair.getFirst().getY(), fragment.getRGB(pair.getSecond().getX(), pair.getSecond().getY()));
+                        return Mono.just(true);
+                    })
+                    .map(val -> {
+                        try {
+                            ImageIO.write(source, IMAGE_FORMAT, new BufferedOutputStream(Files.newOutputStream(sourceFile)));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            return false;
+                        }
+
+                        return val;
+                    })
+                    .reduce((acc, cur) -> acc && cur)
+                    .flatMap(res -> res ? Mono.just(true) : Mono.empty());
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return Mono.empty();
+        }
     }
 
 }

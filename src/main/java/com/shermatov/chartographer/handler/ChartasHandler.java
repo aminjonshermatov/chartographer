@@ -1,29 +1,30 @@
 package com.shermatov.chartographer.handler;
 
 import com.shermatov.chartographer.domain.Charta;
+import com.shermatov.chartographer.domain.Pair;
+import com.shermatov.chartographer.domain.Point;
 import com.shermatov.chartographer.exception.BadRequestException;
+import com.shermatov.chartographer.exception.ChartaNotFoundException;
 import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.repository.ChartasConfigRepository;
 import com.shermatov.chartographer.repository.ChartasRepository;
 import com.shermatov.chartographer.repository.ImagesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import javax.imageio.ImageIO;
-import javax.imageio.stream.ImageInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,8 +64,8 @@ public class ChartasHandler {
 
         return chartasRepository.insert(charta)
                 .flatMap(id -> chartasConfigRepository.getPathToContentFolder()
-                        .flatMap(path -> {
-                            imagesRepository.createDefaultImage(path, id, width, height)
+                        .flatMap(folder -> {
+                            imagesRepository.createDefaultImage(Paths.get(folder, id + "." + IMAGE_FORMAT), width, height)
                                     .subscribeOn(Schedulers.boundedElastic())
                                     .subscribe();
 
@@ -90,27 +91,42 @@ public class ChartasHandler {
         if (x < 0 || y < 0 || x > MAX_IMAGE_WIDTH || y > MAX_IMAGE_HEIGHT)
             return Mono.error(BadRequestException::new);
 
-        System.out.println("1");
-        // UnsupportedMediaTypeStatusException: 415 UNSUPPORTED_MEDIA_TYPE "Content type 'image/bmp' not supported for bodyType=java.io.ByteArrayInputStream"
-        serverRequest.bodyToFlux(ByteArrayInputStream.class)
-                .publishOn(Schedulers.boundedElastic())
-                .flatMap(image -> {
-                    System.out.println("2");
-                    try {
-                        System.out.println("ok");
-                        ImageIO.write(ImageIO.read(image), IMAGE_FORMAT, new File("testSample123" + "." + IMAGE_FORMAT));
-                    } catch (IOException e) {
-                        System.out.println("error");
-                        return Mono.error(ServerErrorException::new);
-                    }
+        String id = serverRequest.pathVariable("id");
 
-                    return Flux.empty();
-                })
-                .subscribeOn(Schedulers.boundedElastic())
-                .subscribe();
-        System.out.println("3");
+        return chartasRepository.findById(id)
+                .switchIfEmpty(Mono.error(ChartaNotFoundException::new))
+                .filter(charta -> x <= charta.getWidth() && y <= charta.getHeight())
+                .switchIfEmpty(Mono.error(BadRequestException::new))
+                .flatMap(charta -> chartasConfigRepository.getPathToContentFolder()
+                        .flatMap(folderPath -> DataBufferUtils.join(serverRequest.bodyToFlux(DataBuffer.class))
+                                .map(dataBuffer -> {
+                                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                                    dataBuffer.read(bytes);
+                                    DataBufferUtils.release(dataBuffer);
+                                    return new ByteArrayInputStream(bytes);
+                                })
+                                .map(istream -> {
+                                    try {
+                                        return ImageIO.read(istream);
+                                    } catch (IOException ex) {
+                                        throw Exceptions.propagate(ex);
+                                    }
+                                })
+                                .flatMap(fragmentBF -> {
+                                    Flux<Pair<Point, Point>> coordinates = Flux.range(x, width)
+                                            .filter(j -> j < charta.getWidth())
+                                            .flatMap(j -> Flux.range(y, height)
+                                                    .filter(i -> i < charta.getHeight())
+                                                    .map(i -> new Pair<>(new Point(i, j), new Point(i - y, j - x))));
 
-        return ServerResponse.ok().build();
+                                    return imagesRepository.overrideImage(
+                                                    Paths.get(folderPath, id + "." + IMAGE_FORMAT),
+                                                    fragmentBF,
+                                                    coordinates
+                                            )
+                                            .switchIfEmpty(Mono.error(ServerErrorException::new))
+                                            .flatMap(res -> ServerResponse.ok().build());
+                                })));
     }
 
     public Mono<ServerResponse> getCharta(ServerRequest serverRequest) {
@@ -135,12 +151,13 @@ public class ChartasHandler {
 
         String id = serverRequest.pathVariable("id");
         return chartasRepository.findById(id)
+                .switchIfEmpty(Mono.error(ChartaNotFoundException::new))
                 .flatMap(charta -> {
                     if (x + width > charta.getWidth() || y + height > charta.getHeight())
                         return Mono.error(BadRequestException::new);
                     return chartasConfigRepository.getPathToContentFolder();
                 })
-                .flatMap(folderPath -> imagesRepository.getSubImage(folderPath, id, x, y, width, height))
+                .flatMap(folderPath -> imagesRepository.getSubImage(Paths.get(folderPath, id + "." + IMAGE_FORMAT), x, y, width, height))
                 .flatMap(image -> ServerResponse.ok()
                         .header("Content-Type", "image/" + IMAGE_FORMAT)
                         .body(BodyInserters.fromDataBuffers(Flux.just(image))));
@@ -150,8 +167,9 @@ public class ChartasHandler {
         String id = serverRequest.pathVariable("id");
 
         return chartasRepository.deleteById(id)
+                .switchIfEmpty(Mono.error(ChartaNotFoundException::new))
                 .flatMap((ignore_) -> chartasConfigRepository.getPathToContentFolder())
-                .flatMap(folderPath -> imagesRepository.deleteImage(folderPath, id))
+                .flatMap(folderPath -> imagesRepository.deleteImage(Paths.get(folderPath, id + "." + IMAGE_FORMAT)))
                 .flatMap((ignore_) -> ServerResponse.ok().build());
     }
 
