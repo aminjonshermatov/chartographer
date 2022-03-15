@@ -1,13 +1,10 @@
 package com.shermatov.chartographer.repository.impl;
 
-import com.shermatov.chartographer.domain.Pair;
-import com.shermatov.chartographer.domain.Point;
 import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.repository.ImagesRepository;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.stereotype.Repository;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import javax.imageio.ImageIO;
@@ -75,33 +72,25 @@ public class ImagesRepositoryImpl implements ImagesRepository {
     }
 
     @Override
-    public Mono<Boolean> overrideImage(final Path sourceFile, BufferedImage fragment, Flux<Pair<Point, Point>> points) {
-        try {
-            final BufferedImage source = ImageIO.read(Files.newInputStream(sourceFile));
+    public Mono<Boolean> overrideImage(final Path sourceFile, BufferedImage fragment, int x, int y, int width, int height) {
+        return Mono.defer(() -> {
+            try {
+                final BufferedImage source = ImageIO.read(Files.newInputStream(sourceFile));
 
-            return points
-                    .flatMap(pair -> {
-                        System.out.println(pair.getFirst().getX() + " " + pair.getFirst().getY() + ":" + pair.getSecond().getX() + " " + pair.getSecond().getY());
-                        source.setRGB(pair.getFirst().getX(), pair.getFirst().getY(), fragment.getRGB(pair.getSecond().getX(), pair.getSecond().getY()));
-                        return Mono.just(true);
-                    })
-                    .map(val -> {
-                        try {
-                            ImageIO.write(source, IMAGE_FORMAT, new BufferedOutputStream(Files.newOutputStream(sourceFile)));
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            return false;
-                        }
+                for (int i = y; i < source.getHeight() && i - y < height; ++i) {
+                    for (int j = x; j < source.getWidth() && j - x < width; ++j) {
+                        source.setRGB(j, i, fragment.getRGB(j - x, i - y));
+                    }
+                }
 
-                        return val;
-                    })
-                    .reduce((acc, cur) -> acc && cur)
-                    .flatMap(res -> res ? Mono.just(true) : Mono.empty());
+                ImageIO.write(source, IMAGE_FORMAT, new BufferedOutputStream(Files.newOutputStream(sourceFile)));
 
-        } catch (IOException e) {
-            e.printStackTrace();
-            return Mono.empty();
-        }
+                return Mono.just(true);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return Mono.error(ServerErrorException::new);
+            }
+        });
     }
 
 }

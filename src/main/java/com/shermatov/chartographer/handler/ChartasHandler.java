@@ -1,8 +1,6 @@
 package com.shermatov.chartographer.handler;
 
 import com.shermatov.chartographer.domain.Charta;
-import com.shermatov.chartographer.domain.Pair;
-import com.shermatov.chartographer.domain.Point;
 import com.shermatov.chartographer.exception.BadRequestException;
 import com.shermatov.chartographer.exception.ChartaNotFoundException;
 import com.shermatov.chartographer.exception.ServerErrorException;
@@ -112,22 +110,20 @@ public class ChartasHandler {
                                         throw Exceptions.propagate(ex);
                                     }
                                 })
-                                .flatMap(fragmentBF -> {
-                                    Flux<Pair<Point, Point>> coordinates = Flux.range(x, width)
-                                            .filter(j -> j < charta.getWidth())
-                                            .flatMap(j -> Flux.range(y, height)
-                                                    .filter(i -> i < charta.getHeight())
-                                                    .map(i -> new Pair<>(new Point(i, j), new Point(i - y, j - x))));
-
-                                    return imagesRepository.overrideImage(
-                                                    Paths.get(folderPath, id + "." + IMAGE_FORMAT),
-                                                    fragmentBF,
-                                                    coordinates
-                                            )
-                                            .switchIfEmpty(Mono.error(ServerErrorException::new))
-                                            .flatMap(res -> ServerResponse.ok().build());
-                                })));
-    }
+                                .filter(bImage -> bImage.getHeight() == height && bImage.getWidth() == width)
+                                .switchIfEmpty(Mono.error(BadRequestException::new))
+                                .flatMap(fragmentBF -> imagesRepository.overrideImage(
+                                                Paths.get(folderPath, id + "." + IMAGE_FORMAT),
+                                                fragmentBF,
+                                                x,
+                                                y,
+                                                width,
+                                                height
+                                        )
+                                        .switchIfEmpty(Mono.error(ServerErrorException::new))
+                                        .flatMap(res -> ServerResponse.ok().build())
+                                )));
+}
 
     public Mono<ServerResponse> getCharta(ServerRequest serverRequest) {
         Optional<String> xOpt = serverRequest.queryParam("x");
