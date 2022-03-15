@@ -6,7 +6,6 @@ import com.shermatov.chartographer.exception.ServerErrorException;
 import com.shermatov.chartographer.handler.ChartasHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.reactive.function.server.RouterFunction;
